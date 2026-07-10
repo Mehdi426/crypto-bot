@@ -1,0 +1,52 @@
+name: Run Crypto Bot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */4 * * *'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run scan
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          python -c "
+import asyncio
+import os
+from bot import scan_markets
+from telegram import Bot
+
+async def main():
+    bot = Bot(token=os.environ['BOT_TOKEN'])
+    chat_id = '6932573031'
+    
+    await bot.send_message(chat_id=chat_id, text='⏳ اسکن خودکار بازار شروع شد...')
+    signals = await scan_markets()
+    
+    if not signals:
+        await bot.send_message(chat_id=chat_id, text='❌ هیچ فرصتی پیدا نشد!')
+        return
+    
+    response = '📊 **فرصت‌های معاملاتی:**\n\n'
+    for i, sig in enumerate(signals[:20], 1):
+        response += (
+            f\"{i}. {sig['type']} - {sig['symbol']}\n\"
+            f\"   • کندل‌های لگ: {sig['leg_length']}\n\"
+            f\"   • ورود: {sig['entry']:.4f}\n\"
+            f\"   • حد ضرر: {sig['stop_loss']:.4f}\n\"
+            f\"   • حد سود: {sig['take_profit']:.4f}\n\n\"
+        )
+    
+    await bot.send_message(chat_id=chat_id, text=response)
+
+asyncio.run(main())
+"
