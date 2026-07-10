@@ -1,23 +1,44 @@
-name: Run Crypto Bot
+import asyncio
+import os
+import sys
+import traceback
+from bot import scan_markets
+from telegram import Bot
 
-on:
-  workflow_dispatch:
+async def main():
+    try:
+        print("شروع اسکن...")
+        bot = Bot(token=os.environ['BOT_TOKEN'])
+        chat_id = '6932573031'
+        
+        await bot.send_message(chat_id=chat_id, text='⏳ اسکن خودکار بازار شروع شد...')
+        
+        print("در حال دریافت سیگنال‌ها...")
+        signals = await scan_markets()
+        
+        print(f"تعداد سیگنال‌ها: {len(signals)}")
+        
+        if not signals:
+            await bot.send_message(chat_id=chat_id, text='❌ هیچ فرصتی پیدا نشد!')
+            print("اتمام - بدون سیگنال")
+            return
+        
+        response = '📊 **فرصت‌های معاملاتی:**\n\n'
+        for i, sig in enumerate(signals[:20], 1):
+            response += (
+                f"{i}. {sig['type']} - {sig['symbol']}\n"
+                f"   • کندل‌های لگ: {sig['leg_length']}\n"
+                f"   • ورود: {sig['entry']:.4f}\n"
+                f"   • حد ضرر: {sig['stop_loss']:.4f}\n"
+                f"   • حد سود: {sig['take_profit']:.4f}\n\n"
+            )
+        
+        await bot.send_message(chat_id=chat_id, text=response)
+        print("اتمام - سیگنال‌ها ارسال شد")
+        
+    except Exception as e:
+        print(f"خطا: {e}")
+        traceback.print_exc()
+        sys.exit(1)
 
-jobs:
-  scan:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-      - name: Run bot
-        env:
-          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-        run: python run_scan.py
+asyncio.run(main())
